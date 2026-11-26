@@ -30,11 +30,17 @@ export function formatDate(value) { const date=value?.toDate ? value.toDate() : 
 export function toast(message) { const el=document.getElementById("toast"); if(!el) return; el.textContent=message; el.classList.add("show"); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove("show"),3000); }
 export function redirectFor(role) { location.href = role === "admin" ? "admin.html" : role === "teknisi" ? "teknisi.html" : "warga.html"; }
 export function parseCoordinates(value) {
-  const text=String(value||"").trim().replace(/−/g,"-");
-  const direct=text.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
-  const url=text.match(/(?:@|q=)(-?\d{1,2}(?:\.\d+)?)[,%2C\s]+(-?\d{1,3}(?:\.\d+)?)/i);
-  const m=direct||url; if(!m) return null;
-  const lat=Number(m[1]),lng=Number(m[2]);
+  // Menerima: "-7.24, 112.62" · "-7.24 112.62" · tautan Google Maps (@lat,lng · q=/query=/destination=lat,lng · !3dlat!4dlng)
+  let text=String(value||"").trim(); try{text=decodeURIComponent(text);}catch{} text=text.replace(/−/g,"-");
+  const num="(-?\\d{1,3}(?:[.,]\\d+)?)";
+  const patterns=[
+    new RegExp(`^\\s*${num}\\s*[,;\\s]\\s*${num}\\s*$`),
+    /!3d(-?\d{1,2}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/,
+    /(?:@|[?&](?:q|query|ll|destination|center)=)(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)/i
+  ];
+  let m=null; for(const p of patterns){ m=text.match(p); if(m) break; }
+  if(!m) return null;
+  const lat=Number(String(m[1]).replace(",",".")),lng=Number(String(m[2]).replace(",","."));
   return Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180?{lat,lng}:null;
 }
 export function distance([a,b],[c,d]) { const r=n=>n*Math.PI/180,R=6371,x=r(c-a),y=r(d-b),q=Math.sin(x/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(y/2)**2; return R*2*Math.atan2(Math.sqrt(q),Math.sqrt(1-q)); }
@@ -44,14 +50,24 @@ export function setupPortal(user, roleLabel) {
   if(name) name.textContent=user.name; if(role) role.textContent=roleLabel; if(avatar) avatar.textContent=user.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase();
 }
 
+// Peta bergaya Google Maps (Leaflet + tile Google). Tanpa API key.
+// Tombol kanan atas: Peta / Satelit. Jika tile Google gagal dimuat, otomatis pindah ke OpenStreetMap.
+const GOOGLE_TILE = lyrs => `https://{s}.google.com/vt/lyrs=${lyrs}&hl=id&x={x}&y={y}&z={z}`;
 export function initLeafletMap(id, center=[-7.236,112.617], zoom=14) {
   const el=document.getElementById(id); if(!el) return null;
   if(typeof L==="undefined") { el.innerHTML='<div class="map-fallback"><strong>Peta belum dapat dimuat.</strong><br>Periksa koneksi internet lalu muat ulang.</div>'; return null; }
-  const map=L.map(id).setView(center,zoom);
-  const layer=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Tiles &copy; Esri"}).addTo(map);
-  let errors=0,switched=false; layer.on("tileerror",()=>{ if(++errors<3||switched)return; switched=true; map.removeLayer(layer); L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",{subdomains:"abc",maxZoom:19,attribution:"&copy; OpenStreetMap contributors, Tiles HOT"}).addTo(map); });
+  const map=L.map(id,{zoomControl:true}).setView(center,zoom);
+  const opts={subdomains:["mt0","mt1","mt2","mt3"],maxZoom:20,attribution:"Map data &copy; Google"};
+  const road=L.tileLayer(GOOGLE_TILE("m"),opts).addTo(map);
+  const satellite=L.tileLayer(GOOGLE_TILE("y"),opts);
+  L.control.layers({"Peta":road,"Satelit":satellite},null,{position:"topright"}).addTo(map);
+  let errors=0,switched=false; road.on("tileerror",()=>{ if(++errors<4||switched)return; switched=true; map.removeLayer(road); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{subdomains:"abc",maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(map); });
   return map;
 }
+
+// Tautan navigasi Google Maps dari lokasi pengguna saat ini ke titik tujuan.
+export function googleDirectionsUrl(lat,lng) { return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`; }
+export function googlePlaceUrl(lat,lng) { return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`; }
 
 export function markerIcon(status="Menunggu Verifikasi") {
   const colors={"Menunggu Verifikasi":"#ffb84d","Ditugaskan":"#3e83f8","Menuju Lokasi":"#5552d9","Selesai":"#9a67e8","Ditolak":"#7c8298"};

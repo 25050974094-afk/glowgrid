@@ -173,3 +173,31 @@ footer { max-width: 1400px; margin: 0 auto; padding: 30px clamp(20px,5vw,76px); 
 
 @media(max-width:1000px){.auth-shell{grid-template-columns:1fr}.auth-story{min-height:440px}.portal-nav{display:none}.portal-hero{align-items:flex-start;flex-direction:column}.portal-summary{width:100%;min-width:0;grid-template-columns:repeat(4,1fr)}.citizen-report-grid{grid-template-columns:repeat(2,1fr)}.structure-strip{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){.auth-shell{width:100%;min-height:100vh;margin:0;border-radius:0}.auth-story{min-height:390px;padding:30px 24px}.auth-story h1{font-size:44px}.role-preview{grid-template-columns:1fr}.auth-panel{padding:38px 22px}.mode-banner{align-items:flex-start;flex-direction:column}.mode-banner span{text-align:left}.portal-topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-block:10px}.profile-chip div{display:none}.profile-chip button{margin-left:0}.portal-main{padding-top:26px}.portal-summary{grid-template-columns:repeat(2,1fr)}.citizen-report-grid{grid-template-columns:1fr}.structure-strip{grid-template-columns:1fr}.workflow-note{align-items:stretch;flex-direction:column}.workflow-note i{transform:rotate(90deg);text-align:center}}
+
+/* ===== Peta lokasi warga (satu peta) & tombol navigasi teknisi ===== */
+.location-toolbar { margin-top: 4px; }
+.place-search { flex: 1; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; max-width: 460px; }
+.place-search input { margin: 0; height: 42px; }
+.place-search .button { min-height: 42px; }
+.coordinate-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; margin-top: 7px; }
+.coordinate-row input { margin: 0; font-variant-numeric: tabular-nums; }
+.map-open { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; text-decoration: none; white-space: nowrap; }
+.map-open.disabled { pointer-events: none; opacity: .45; }
+.coord-status { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.coord-status.ok { color: #1f8a5b; font-weight: 600; }
+.coord-status.warn { color: #b7791f; font-weight: 600; }
+.coord-status.error { color: #b93648; font-weight: 600; }
+.report-map { cursor: crosshair; }
+.report-map .leaflet-marker-draggable { cursor: grab; }
+
+.nav-button { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 42px; margin: 0 0 10px; border-radius: 11px; padding: 0 14px; color: white; background: linear-gradient(135deg,#1a73e8,#3e83f8); box-shadow: 0 8px 18px rgba(26,115,232,.25); font-size: 13px; font-weight: 700; text-decoration: none; transition: transform .2s, box-shadow .2s; }
+.nav-button:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(26,115,232,.32); }
+.nav-button:active { transform: translateY(0); }
+.route-nav { margin: 12px 0 0; }
+.leaflet-popup-content .popup-nav { display: inline-flex; width: auto; min-height: 32px; margin: 8px 0 0; padding: 0 12px; color: white !important; font-size: 12px; }
+
+@media (max-width: 720px) {
+  .place-search { max-width: none; width: 100%; }
+  .coordinate-row { grid-template-columns: 1fr; }
+  .map-open { justify-content: center; }
+}
