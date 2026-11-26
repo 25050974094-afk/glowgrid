@@ -1,5 +1,42 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Ruang admin GlowGrid."><title>Ruang Admin | GlowGrid</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css"></head><body><div class="ambient ambient-one"></div><header class="topbar portal-topbar"><a class="brand" href="admin.html"><span class="brand-mark"><span></span></span><span>Glow<span>Grid</span></span></a><nav class="portal-nav"><a href="#antrean" class="active">Antrean</a><a href="#register">Semua laporan</a><a href="#struktur">Struktur data</a></nav><div class="profile-chip"><span id="profileAvatar">AD</span><div><b id="profileName">Memuat...</b><small id="profileRole">Admin</small></div><button id="logoutBtn">Keluar</button></div></header>
-<main class="portal-main"><section class="portal-hero admin-hero"><div><span class="eyebrow"><i></i> Ruang admin</span><h1>Verifikasi laporan dan atur penugasan teknisi.</h1><p>Antrean diproses berdasarkan FIFO. Admin dapat melihat detail lokasi sebelum menetapkan teknisi.</p></div><button id="frontBtn" class="button secondary">Buka antrean terdepan</button></section><section id="adminSummary" class="admin-summary"></section>
-<section id="antrean" class="admin-grid"><article class="panel queue-panel"><div class="panel-head"><div><span class="section-kicker">Queue · FIFO</span><h2>Antrean verifikasi</h2></div><span id="queueCount" class="count-pill"></span></div><div id="queueList" class="queue-list"></div></article><article class="panel assignment-panel"><div class="panel-head"><div><span class="section-kicker">Kontrol laporan</span><h2>Detail & penugasan</h2></div></div><div id="adminDetail" class="empty-state"><span>⌁</span><h3>Pilih laporan</h3><p>Klik laporan pada antrean untuk memeriksa detail.</p></div></article></section>
-<section id="register" class="panel table-panel"><div class="panel-head"><div><span class="section-kicker">Linked list dinamis</span><h2>Register seluruh laporan</h2></div><div class="table-tools"><input id="adminSearch" type="search" placeholder="Cari ID, lokasi, kondisi..."><select id="statusFilter"><option value="all">Semua status</option><option>Menunggu Verifikasi</option><option>Ditugaskan</option><option>Menuju Lokasi</option><option>Selesai</option><option>Ditolak</option></select></div></div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Lokasi</th><th>Kondisi</th><th>Prioritas</th><th>Teknisi</th><th>Status</th></tr></thead><tbody id="reportTableBody"></tbody></table></div></section>
-<section id="struktur" class="structure-strip"><article><span>Q</span><div><b>Queue</b><small>Verifikasi FIFO</small></div></article><article><span>L</span><div><b>Linked List</b><small>Register laporan dinamis</small></div></article><article><span>G</span><div><b>Graph</b><small>Jaringan rute teknisi</small></div></article><article><span>T</span><div><b>Tree + Rekursif</b><small>Kecamatan → kelurahan → laporan</small></div></article></section></main><div id="toast" class="toast"></div><script type="module" src="js/admin-page.js"></script></body></html>
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Ruang admin GlowGrid."><title>Ruang Admin | GlowGrid</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css"></head>
+<body><div class="ambient ambient-one"></div>
+<header class="topbar portal-topbar"><a class="brand" href="admin.html"><span class="brand-mark"><span></span></span><span>Glow<span>Grid</span></span></a>
+<nav class="portal-nav"><a href="#kontrol" class="active">Kontrol</a><a href="#antrean">Antrean</a><a href="#teknisi">Teknisi</a><a href="#register">Semua laporan</a><a href="#log">Log</a></nav>
+<div class="profile-chip"><span id="profileAvatar">AD</span><div><b id="profileName">Memuat...</b><small id="profileRole">Admin</small></div><button id="logoutBtn">Keluar</button></div></header>
+
+<main class="portal-main">
+<section class="portal-hero admin-hero"><div><span class="eyebrow"><i></i> Ruang admin</span><h1>Pantau antrean, atur penugasan teknisi.</h1><p>Aktifkan penugasan otomatis agar sistem menugaskan teknisi yang siap, atau matikan untuk bekerja manual.</p></div><button id="frontBtn" class="button secondary">Buka antrean teratas</button></section>
+
+<section id="kontrol" class="panel control-panel">
+  <div class="control-main">
+    <div><span class="section-kicker">Mode penugasan</span><h2 id="modeTitle">Memuat...</h2><p id="modeDesc" class="mode-desc"></p></div>
+    <label class="switch" title="Penugasan otomatis"><input id="autoToggle" type="checkbox" disabled><span class="slider"></span><b id="autoLabel">OFF</b></label>
+  </div>
+  <div id="shiftInfo" class="shift-info"></div>
+  <details class="settings-box"><summary>Pengaturan jam kerja &amp; malam</summary>
+    <form id="settingsForm" class="settings-grid">
+      <label>Jam kerja mulai<input id="shiftStart" type="time" required></label>
+      <label>Jam kerja selesai<input id="shiftEnd" type="time" required></label>
+      <label>Urgensi minimum saat malam<input id="nightMin" type="number" min="0" max="100" required><span class="field-note">Di luar jam kerja, hanya laporan dengan skor ini ke atas yang ditugaskan ke teknisi piket.</span></label>
+      <label>Anggap tidak aktif setelah (jam)<input id="inactiveHours" type="number" min="1" max="72" required><span class="field-note">Teknisi Ready yang tidak membuka aplikasi selama ini tidak akan diberi tugas.</span></label>
+      <button class="button primary" type="submit">Simpan pengaturan</button>
+    </form>
+  </details>
+</section>
+
+<section id="adminSummary" class="admin-summary"></section>
+
+<section id="antrean" class="admin-grid">
+  <article class="panel queue-panel"><div class="panel-head"><div><span class="section-kicker">Priority Queue · urgensi + lama menunggu</span><h2>Antrean laporan</h2></div><span id="queueCount" class="count-pill"></span></div><div id="queueList" class="queue-list"></div></article>
+  <article class="panel assignment-panel"><div class="panel-head"><div><span class="section-kicker">Kontrol laporan</span><h2>Detail &amp; penugasan</h2></div></div><div id="adminDetail" class="empty-state"><span>⌁</span><h3>Pilih laporan</h3><p>Klik laporan pada antrean untuk memeriksa detail.</p></div></article>
+</section>
+
+<section id="teknisi" class="panel table-panel"><div class="panel-head"><div><span class="section-kicker">Ketersediaan</span><h2>Teknisi</h2></div><span id="techCount" class="count-pill"></span></div><div class="table-wrap"><table class="tech-table"><thead><tr><th>Teknisi</th><th>Status</th><th>Beban</th><th>Terakhir aktif</th><th>Kapasitas</th><th>Piket malam</th></tr></thead><tbody id="techTableBody"></tbody></table></div></section>
+
+<section id="register" class="panel table-panel"><div class="panel-head"><div><span class="section-kicker">Linked list dinamis</span><h2>Register seluruh laporan</h2></div><div class="table-tools"><input id="adminSearch" type="search" placeholder="Cari ID, lokasi, kondisi..."><select id="statusFilter"><option value="all">Semua status</option><option>Menunggu Verifikasi</option><option>Ditugaskan</option><option>Menuju Lokasi</option><option>Selesai</option><option>Ditolak</option></select></div></div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Lokasi</th><th>Kondisi</th><th>Urgensi</th><th>Teknisi</th><th>Status</th><th></th></tr></thead><tbody id="reportTableBody"></tbody></table></div></section>
+
+<section id="log" class="panel log-panel"><div class="panel-head"><div><span class="section-kicker">Jejak keputusan</span><h2>Log penugasan</h2></div><button id="refreshLogBtn" class="button tertiary" type="button">Muat ulang</button></div><ol id="logList" class="log-list"></ol></section>
+
+<section id="struktur" class="structure-strip"><article><span>Q</span><div><b>Priority Queue</b><small>Urgensi + aging</small></div></article><article><span>L</span><div><b>Linked List</b><small>Register laporan dinamis</small></div></article><article><span>G</span><div><b>Graph + Dijkstra</b><small>Jarak teknisi ke lokasi</small></div></article><article><span>T</span><div><b>Tree + Rekursif</b><small>Kecamatan → kelurahan → laporan</small></div></article></section>
+</main>
+<div id="toast" class="toast"></div><script type="module" src="js/admin-page.js"></script></body></html>

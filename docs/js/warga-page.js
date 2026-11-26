@@ -98,6 +98,15 @@ async function searchPlace() {
 $("placeSearchBtn").onclick = searchPlace;
 $("placeQuery").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });
 
+// ---------- Peringatan keselamatan (bahaya listrik → PLN 123) ----------
+const DANGER_WORDS = /\b(kabel\w*|terkelupas|ngelotok|percik\w*|api|asap|\w*setrum|korsl?et\w*|konslet\w*|roboh|tumbang|menjuntai)\b/i;
+function updateDangerNote() {
+  const show = $("category").value === "Tiang/kabel bermasalah" || DANGER_WORDS.test($("description").value);
+  $("dangerNote").hidden = !show;
+}
+$("category").addEventListener("change", updateDangerNote);
+$("description").addEventListener("input", updateDangerNote);
+
 // ---------- Riwayat laporan ----------
 async function renderReports() {
   const reports = await listReports(user);
@@ -122,7 +131,7 @@ $("reportForm").onsubmit = async e => {
   const submit = $("submitBtn"); submit.disabled = true; submit.textContent = "Mengirim...";
   try {
     const r = await createReport(user, { phone: $("phone").value.trim(), category: $("category").value, severity: Number($("severity").value), description: $("description").value.trim(), village: $("village").value, address: $("address").value.trim(), lat: point.lat, lng: point.lng });
-    e.target.reset(); $("phone").value = user.phone || ""; clearPoint();
+    e.target.reset(); $("phone").value = user.phone || ""; clearPoint(); updateDangerNote();
     $("successId").textContent = r.id; $("reportSuccess").classList.add("show");
     await renderReports();
   } catch (err) { toast(err.message || "Laporan gagal dikirim."); }
