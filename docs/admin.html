@@ -1,18 +1,18 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Ruang admin GlowGrid."><title>Ruang Admin | GlowGrid</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css"></head>
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Ruang admin GlowGrid."><title>Ruang Admin | GlowGrid</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css"></head>
 <body><div class="ambient ambient-one"></div>
 <header class="topbar portal-topbar"><a class="brand" href="admin.html"><span class="brand-mark"><span></span></span><span>Glow<span>Grid</span></span></a>
-<nav class="portal-nav"><a href="#kontrol" class="active">Kontrol</a><a href="#antrean">Antrean</a><a href="#teknisi">Teknisi</a><a href="#register">Semua laporan</a><a href="#log">Log</a></nav>
+<nav class="portal-nav"><a data-nav="dasbor" href="#dasbor">Dasbor</a><a data-nav="antrean" href="#antrean">Antrean<span id="navQueueBadge" class="nav-badge"></span></a><a data-nav="peta" href="#peta">Peta</a><a data-nav="teknisi" href="#teknisi">Teknisi</a><a data-nav="laporan" href="#laporan">Semua laporan</a><a data-nav="log" href="#log">Log</a></nav>
 <div class="profile-chip"><span id="profileAvatar">AD</span><div><b id="profileName">Memuat...</b><small id="profileRole">Admin</small></div><button id="logoutBtn">Keluar</button></div></header>
 
 <main class="portal-main">
-<section class="portal-hero admin-hero"><div><span class="eyebrow"><i></i> Ruang admin</span><h1>Pantau antrean, atur penugasan teknisi.</h1><p>Aktifkan penugasan otomatis agar sistem menugaskan teknisi yang siap, atau matikan untuk bekerja manual.</p></div><button id="frontBtn" class="button secondary">Buka antrean teratas</button></section>
-
+<div data-view="dasbor" hidden>
+<section class="portal-hero admin-hero"><div><span class="eyebrow"><i></i> Dasbor admin</span><h1>Pantau antrean, atur penugasan teknisi.</h1><p>AI menilai urgensi setiap laporan, lalu sistem menugaskan teknisi yang siap. Matikan kapan saja untuk bekerja manual.</p></div><button id="frontBtn" class="button secondary">Buka antrean teratas</button></section>
 <section id="kontrol" class="panel control-panel">
   <div class="control-main">
     <div><span class="section-kicker">Mode penugasan</span><h2 id="modeTitle">Memuat...</h2><p id="modeDesc" class="mode-desc"></p></div>
     <label class="switch" title="Penugasan otomatis"><input id="autoToggle" type="checkbox" disabled><span class="slider"></span><b id="autoLabel">OFF</b></label>
   </div>
-  <div id="shiftInfo" class="shift-info"></div>
+  <div class="ai-row"><div class="ai-text"><span class="ai-badge">✦ AI</span><div><b>Analisis laporan dengan AI</b><small id="aiDesc">Memuat...</small></div></div><label class="switch small" title="Analisis AI"><input id="aiToggle" type="checkbox" disabled><span class="slider"></span><b id="aiLabel">OFF</b></label></div><div id="aiStats" class="ai-stats"></div><div id="shiftInfo" class="shift-info"></div>
   <details class="settings-box"><summary>Pengaturan jam kerja &amp; malam</summary>
     <form id="settingsForm" class="settings-grid">
       <label>Jam kerja mulai<input id="shiftStart" type="time" required></label>
@@ -23,20 +23,32 @@
     </form>
   </details>
 </section>
-
 <section id="adminSummary" class="admin-summary"></section>
-
+<section class="panel attention-panel"><div class="panel-head"><div><span class="section-kicker">Perlu perhatian</span><h2>Yang perlu ditindaklanjuti</h2></div></div><ul id="attentionList" class="attention-list"></ul></section>
+<section id="struktur" class="structure-strip"><article><span>Q</span><div><b>Priority Queue</b><small>Urgensi AI/algoritma + aging</small></div></article><article><span>L</span><div><b>Linked List</b><small>Register laporan dinamis</small></div></article><article><span>G</span><div><b>Graph + Dijkstra</b><small>Jarak teknisi ke lokasi</small></div></article><article><span>T</span><div><b>Tree + Rekursif</b><small>Kecamatan → kelurahan → laporan</small></div></article></section>
+</div>
+<div data-view="antrean" hidden>
+<header class="view-head"><div><span class="eyebrow"><i></i> Antrean</span><h1>Antrean &amp; penugasan</h1><p>Laporan diurutkan berdasarkan urgensi dan lama menunggu. Pilih laporan untuk melihat detail, saran teknisi, dan foto.</p></div></header>
 <section id="antrean" class="admin-grid">
   <article class="panel queue-panel"><div class="panel-head"><div><span class="section-kicker">Priority Queue · urgensi + lama menunggu</span><h2>Antrean laporan</h2></div><span id="queueCount" class="count-pill"></span></div><div id="queueList" class="queue-list"></div></article>
   <article class="panel assignment-panel"><div class="panel-head"><div><span class="section-kicker">Kontrol laporan</span><h2>Detail &amp; penugasan</h2></div></div><div id="adminDetail" class="empty-state"><span>⌁</span><h3>Pilih laporan</h3><p>Klik laporan pada antrean untuk memeriksa detail.</p></div></article>
 </section>
-
+</div>
+<div data-view="peta" hidden>
+<header class="view-head"><div><span class="eyebrow"><i></i> Peta</span><h1>Sebaran laporan</h1><p>Lihat lokasi semua laporan dan rute tugas setiap teknisi. Klik penanda untuk membuka detail.</p></div></header>
+<section id="peta" class="panel map-panel"><div class="panel-head"><div><span class="section-kicker">Graph · sebaran laporan &amp; rute teknisi</span><h2>Peta laporan</h2></div><div class="map-filters" role="group" aria-label="Filter peta"><button type="button" data-mapf="aktif" class="active">Belum selesai</button><button type="button" data-mapf="menunggu">Menunggu</button><button type="button" data-mapf="all">Semua</button></div></div><div id="adminMap" class="map admin-map"></div><div id="mapLegend" class="map-legend"></div></section>
+</div>
+<div data-view="teknisi" hidden>
+<header class="view-head"><div><span class="eyebrow"><i></i> Teknisi</span><h1>Ketersediaan teknisi</h1><p>Status, beban tugas, kapasitas, dan jadwal piket malam setiap teknisi.</p></div></header>
 <section id="teknisi" class="panel table-panel"><div class="panel-head"><div><span class="section-kicker">Ketersediaan</span><h2>Teknisi</h2></div><span id="techCount" class="count-pill"></span></div><div class="table-wrap"><table class="tech-table"><thead><tr><th>Teknisi</th><th>Status</th><th>Beban</th><th>Terakhir aktif</th><th>Kapasitas</th><th>Piket malam</th></tr></thead><tbody id="techTableBody"></tbody></table></div></section>
-
+</div>
+<div data-view="laporan" hidden>
+<header class="view-head"><div><span class="eyebrow"><i></i> Arsip</span><h1>Semua laporan</h1><p>Cari dan saring seluruh laporan, termasuk yang sudah selesai atau ditolak.</p></div></header>
 <section id="register" class="panel table-panel"><div class="panel-head"><div><span class="section-kicker">Linked list dinamis</span><h2>Register seluruh laporan</h2></div><div class="table-tools"><input id="adminSearch" type="search" placeholder="Cari ID, lokasi, kondisi..."><select id="statusFilter"><option value="all">Semua status</option><option>Menunggu Verifikasi</option><option>Ditugaskan</option><option>Menuju Lokasi</option><option>Selesai</option><option>Ditolak</option></select></div></div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Lokasi</th><th>Kondisi</th><th>Urgensi</th><th>Teknisi</th><th>Status</th><th></th></tr></thead><tbody id="reportTableBody"></tbody></table></div></section>
-
+</div>
+<div data-view="log" hidden>
+<header class="view-head"><div><span class="eyebrow"><i></i> Log</span><h1>Jejak keputusan</h1><p>Setiap penilaian AI, penugasan otomatis/manual, dan penolakan tugas tercatat di sini.</p></div></header>
 <section id="log" class="panel log-panel"><div class="panel-head"><div><span class="section-kicker">Jejak keputusan</span><h2>Log penugasan</h2></div><button id="refreshLogBtn" class="button tertiary" type="button">Muat ulang</button></div><ol id="logList" class="log-list"></ol></section>
-
-<section id="struktur" class="structure-strip"><article><span>Q</span><div><b>Priority Queue</b><small>Urgensi + aging</small></div></article><article><span>L</span><div><b>Linked List</b><small>Register laporan dinamis</small></div></article><article><span>G</span><div><b>Graph + Dijkstra</b><small>Jarak teknisi ke lokasi</small></div></article><article><span>T</span><div><b>Tree + Rekursif</b><small>Kecamatan → kelurahan → laporan</small></div></article></section>
+</div>
 </main>
-<div id="toast" class="toast"></div><script type="module" src="js/admin-page.js"></script></body></html>
+<div id="toast" class="toast"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="js/admin-page.js"></script></body></html>

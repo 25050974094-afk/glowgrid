@@ -46,6 +46,10 @@ export function parseCoordinates(value) {
 export function distance([a,b],[c,d]) { const r=n=>n*Math.PI/180,R=6371,x=r(c-a),y=r(d-b),q=Math.sin(x/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(y/2)**2; return R*2*Math.atan2(Math.sqrt(q),Math.sqrt(1-q)); }
 
 export function setupPortal(user, roleLabel) {
+  // Saat keyboard HP terbuka, sembunyikan menu bawah & tombol melayang agar kolom yang diketik tidak tertutup.
+  const typing = e => e.target.matches?.("input:not([type=checkbox]):not([type=file]):not([type=radio]), textarea");
+  document.addEventListener("focusin", e => { if (typing(e)) document.body.classList.add("kb-open"); });
+  document.addEventListener("focusout", e => { if (typing(e)) document.body.classList.remove("kb-open"); });
   const name=document.getElementById("profileName"), role=document.getElementById("profileRole"), avatar=document.getElementById("profileAvatar");
   if(name) name.textContent=user.name; if(role) role.textContent=roleLabel; if(avatar) avatar.textContent=user.name.split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase();
 }
@@ -72,4 +76,68 @@ export function googlePlaceUrl(lat,lng) { return `https://www.google.com/maps/se
 export function markerIcon(status="Menunggu Verifikasi") {
   const colors={"Menunggu Verifikasi":"#ffb84d","Ditugaskan":"#3e83f8","Menuju Lokasi":"#5552d9","Selesai":"#9a67e8","Ditolak":"#7c8298"};
   return L.divIcon({className:"",html:`<div class="custom-marker" style="background:${colors[status]||colors["Menunggu Verifikasi"]}"><span></span></div>`,iconSize:[26,26],iconAnchor:[12,24]});
+}
+
+// ---------- Foto ----------
+// Perkecil foto di perangkat sebelum diunggah (maks. 1280 px, JPEG) agar hemat kuota & cepat di jaringan seluler.
+export async function compressImage(file, maxSide = 1280, quality = 0.8) {
+  if (!file || !file.type?.startsWith("image/")) throw new Error("File harus berupa gambar (JPG/PNG).");
+  if (file.size > 15 * 1024 * 1024) throw new Error("Ukuran foto terlalu besar (maks. 15 MB).");
+  let bitmap;
+  try { bitmap = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch { throw new Error("Format foto tidak didukung. Gunakan JPG atau PNG."); }
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", quality));
+  if (!blob) throw new Error("Foto gagal diproses.");
+  return blob;
+}
+
+// Penampil foto layar penuh (dibuat sekali, dipakai semua halaman)
+export function openPhoto(url, caption = "") {
+  let box = document.getElementById("photoViewer");
+  if (!box) {
+    box = document.createElement("div"); box.id = "photoViewer"; box.className = "photo-viewer";
+    box.innerHTML = '<button type="button" class="photo-close" aria-label="Tutup">×</button><figure><img alt=""><figcaption></figcaption></figure>';
+    box.addEventListener("click", e => { if (e.target === box || e.target.classList.contains("photo-close")) box.classList.remove("show"); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") box.classList.remove("show"); });
+    document.body.appendChild(box);
+  }
+  box.querySelector("img").src = url; box.querySelector("figcaption").textContent = caption;
+  box.classList.add("show");
+}
+
+// Langkah timeline status laporan
+export const TIMELINE_STEPS = [
+  { status: "Menunggu Verifikasi", label: "Dilaporkan" },
+  { status: "Ditugaskan", label: "Ditugaskan" },
+  { status: "Menuju Lokasi", label: "Menuju lokasi" },
+  { status: "Selesai", label: "Selesai" }
+];
+
+// ---------- Navigasi multi-halaman (hash router) ----------
+// Setiap <section data-view="nama"> adalah satu halaman. Menu: <a data-nav="nama" href="#nama">.
+// Alamat per halaman (mis. admin.html#peta), tombol Back browser berfungsi, dan bisa di-bookmark.
+let viewHandlers = [];
+export function currentView() { return document.body.dataset.currentView || ""; }
+export function navigate(name) { if (location.hash !== "#" + name) location.hash = name; else showView(name); }
+export function onViewChange(fn) { viewHandlers.push(fn); }
+function showView(name) {
+  const views = [...document.querySelectorAll("[data-view]:not(body)")];
+  const names = new Set(views.flatMap(v => v.dataset.view.split(" ")));
+  if (!names.has(name)) name = document.body.dataset.defaultView || [...names][0];
+  views.forEach(v => { v.hidden = !v.dataset.view.split(" ").includes(name); });
+  document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === name));
+  const changed = document.body.dataset.currentView !== name;
+  document.body.dataset.currentView = name;
+  if (changed) window.scrollTo({ top: 0 });
+  viewHandlers.forEach(fn => fn(name));
+}
+export function setupViews(defaultView) {
+  document.body.dataset.defaultView = defaultView;
+  window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
+  showView(location.hash.slice(1) || defaultView);
 }

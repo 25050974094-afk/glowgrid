@@ -6,8 +6,12 @@ export async function getSupabase() {
   if (!supabaseEnabled) return null;
   if (client) return client;
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+  // Sesi login disimpan per TAB (sessionStorage), bukan per browser.
+  // Dengan begitu tab Warga, Admin, dan Teknisi bisa dibuka berdampingan tanpa saling menimpa sesi.
+  // Sesi tetap bertahan saat halaman di-refresh; menutup tab berarti keluar.
   client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true,
+            storage: window.sessionStorage, storageKey: "glowgrid-auth-tab" }
   });
   return client;
 }
