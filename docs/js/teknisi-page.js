@@ -1,26 +1,10 @@
 import { requireRole, logout } from "./auth-service.js";
 import { declineTask, getMyTechStatus, getSettings, heartbeat, listReports, photoUrl, setMyStatus, updateReport, uploadPhoto } from "./data-service.js";
+import { buildPakalGraph, buildRouteList } from "./structures.js";
 import { LOCATIONS, escapeHTML, formatDate, googleDirectionsUrl, openPhoto, initLeafletMap, markerIcon, setupPortal, toast } from "./common.js";
 
-// ---------- Graph wilayah + Dijkstra (struktur data) ----------
-class WeightedGraph {
-  constructor() { this.adj = {}; }
-  edge(x, y, w) { (this.adj[x] ??= []).push({ n: y, w }); (this.adj[y] ??= []).push({ n: x, w }); }
-  shortest(start, end) {
-    const d = {}, prev = {}, unvisited = new Set(Object.keys(this.adj));
-    for (const n of unvisited) { d[n] = n === start ? 0 : Infinity; prev[n] = null; }
-    while (unvisited.size) {
-      const c = [...unvisited].reduce((x, y) => d[x] <= d[y] ? x : y); unvisited.delete(c);
-      if (c === end || d[c] === Infinity) break;
-      for (const e of this.adj[c]) if (unvisited.has(e.n) && d[c] + e.w < d[e.n]) { d[e.n] = d[c] + e.w; prev[e.n] = c; }
-    }
-    const path = []; for (let c = end; c; c = prev[c]) path.unshift(c);
-    return { distance: d[end], path: path[0] === start ? path : [] };
-  }
-}
-const graph = new WeightedGraph();
-[["Depot Pakal","Babat Jerawat",1.1],["Depot Pakal","Pakal",.9],["Babat Jerawat","Pakal",1.3],["Babat Jerawat","Sumber Rejo",3.5],
- ["Pakal","Benowo",1.8],["Pakal","Sumber Rejo",3],["Benowo","Sumber Rejo",2.7]].forEach(([a, b, w]) => graph.edge(a, b, w));
+// ---------- Graph wilayah (Dijkstra) + rute sebagai Linked List · lihat js/structures.js ----------
+const graph = buildPakalGraph();
 
 const user = await requireRole("teknisi"); if (!user) throw new Error("Akses dihentikan");
 setupPortal(user, "Teknisi Lapangan"); document.getElementById("logoutBtn").onclick = logout;
@@ -67,11 +51,8 @@ async function changeStatus(status, { silent = false } = {}) {
 }
 document.querySelectorAll("[data-status]").forEach(b => b.onclick = () => changeStatus(b.dataset.status));
 
-// ---------- Urutan tugas: urgensi tertinggi, lalu jarak terpendek dari depot ----------
-function orderTasks(items) {
-  return [...items].sort((a, b) => (b.urgency - a.urgency) ||
-    graph.shortest("Depot Pakal", a.village).distance - graph.shortest("Depot Pakal", b.village).distance);
-}
+// ---------- Urutan tugas: disisipkan ke LinkedList (urgensi tertinggi, lalu jarak Dijkstra terdekat) ----------
+function orderTasks(items) { return buildRouteList(items, graph).toArray(); }
 function fullRouteUrl(tasks) {   // Depot → titik 1 → ... → titik terakhir (maks. 9 titik singgah)
   const pts = tasks.slice(0, 10).map(r => `${r.lat},${r.lng}`), dest = pts.pop(), [dlat, dlng] = LOCATIONS["Depot Pakal"];
   let url = `https://www.google.com/maps/dir/?api=1&origin=${dlat},${dlng}&destination=${dest}&travelmode=driving`;
@@ -124,7 +105,7 @@ function render(newIds = new Set()) {
   });
 
   let total = 0, from = "Depot Pakal"; const stops = [from];
-  tasks.forEach(r => { const s = graph.shortest(from, r.village); total += Number.isFinite(s.distance) ? s.distance : 0; from = r.village; stops.push(r.village); });
+  tasks.forEach(r => { const s = graph.shortestPath(from, r.village); total += Number.isFinite(s.distance) ? s.distance : 0; from = r.village; stops.push(r.village); });
   $("routeSummary").innerHTML = tasks.length
     ? `<div class="route-steps">${stops.map((x, i) => `${i ? '<span class="route-arrow">›</span>' : ""}<span class="route-step">${escapeHTML(x)}</span>`).join("")}</div><small>Estimasi bobot graph ${total.toFixed(1)} km · urutan urgensi lalu jarak terpendek.</small><a class="nav-button route-nav" target="_blank" rel="noopener" href="${fullRouteUrl(tasks)}"><span aria-hidden="true">➤</span> Buka seluruh rute di Google Maps</a>`
     : "<p>Rute akan muncul setelah ada tugas.</p>";

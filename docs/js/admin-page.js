@@ -1,10 +1,14 @@
 import { requireRole, logout } from "./auth-service.js";
 import { clearAiFlags, getSettings, listDispatchLog, photoUrl, reanalyzeReport, listReports, listTechnicianOverview, queuePriority, suggestTechnicians, unassignTask, updateReport, updateSettings, updateTechnician } from "./data-service.js";
-import { LOCATIONS, escapeHTML, formatDate, initLeafletMap, markerIcon, navigate, onViewChange, openPhoto, setupPortal, setupViews, statusClass, toast } from "./common.js";
+import { PriorityQueue, Stack, buildRegionTree } from "./structures.js";
+import { initLab } from "./lab.js";
+import { LOCATIONS, currentView, escapeHTML, formatDate, initLeafletMap, markerIcon, navigate, onViewChange, openPhoto, setupPortal, setupViews, statusClass, toast } from "./common.js";
 
 const user = await requireRole("admin"); if (!user) throw new Error("Akses dihentikan");
 setupPortal(user, "Administrator"); document.getElementById("logoutBtn").onclick = logout;
 const $ = id => document.getElementById(id);
+if (location.hash === "#log") history.replaceState(null, "", "#lab");   // menu Log lama → Lab Struktur Data
+window.addEventListener("hashchange", () => { if (location.hash === "#log") location.replace("#lab"); });
 setupViews("dasbor");
 
 let reports = [], techs = [], settings = null, logs = [], selectedId = null;
@@ -25,7 +29,49 @@ function aiBadge(r) {
   return "";
 }
 // Priority Queue: urgensi + aging (laporan lama naik prioritas agar tidak tertinggal)
-function waiting() { return reports.filter(r => r.status === "Menunggu Verifikasi").sort((a, b) => queuePriority(b) - queuePriority(a) || new Date(a.createdAt) - new Date(b.createdAt)); }
+// ---------- Antrean verifikasi = PriorityQueue (binary heap) ----------
+// Prioritas = urgensi + aging (maks +40). Laporan dimasukkan sesuai waktu masuk, jadi prioritas sama → FIFO.
+function waiting() {
+  const pq = new PriorityQueue();
+  reports.filter(r => r.status === "Menunggu Verifikasi")
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .forEach(r => pq.enqueue(r, queuePriority(r)));
+  return pq.toSortedArray().map(node => node.value);
+}
+
+// ---------- Riwayat aksi admin = Stack (LIFO) → tombol Urungkan ----------
+const UNDO_KEY = "glowgrid-undo";
+const undoStack = (() => { try { return Stack.from(JSON.parse(sessionStorage.getItem(UNDO_KEY) || "[]"), 20); } catch { return new Stack(20); } })();
+let lab = null;
+const saveUndo = () => { try { sessionStorage.setItem(UNDO_KEY, JSON.stringify(undoStack.items)); } catch {} renderUndo(); };
+function rememberAction(r, label, afterStatus) {
+  undoStack.push({ label, reportId: r.id, afterStatus, at: new Date().toISOString(),
+    before: { status: r.status, technicianId: r.technicianId || "", technicianName: r.technicianName || "" } });
+  saveUndo();
+}
+function renderUndo() {
+  const top = undoStack.peek(), bar = $("undoBar");
+  bar.hidden = !top;
+  if (top) { $("undoLabel").textContent = top.label; $("undoCount").textContent = undoStack.size > 1 ? `+${undoStack.size - 1} lagi` : ""; }
+  lab?.refresh("stack");
+}
+async function undoLast() {
+  const action = undoStack.pop(); saveUndo();
+  if (!action) return;
+  try {
+    const current = (await listReports(user)).find(r => r.id === action.reportId);
+    if (!current) throw new Error(`Laporan ${action.reportId} tidak ditemukan.`);
+    if (current.status !== action.afterStatus) throw new Error(`${action.reportId} sudah berubah menjadi "${current.status}", aksi tidak bisa diurungkan.`);
+    await updateReport(action.reportId, action.before);
+    await load();
+    toast(`Diurungkan: ${action.label}${settings?.autoDispatch && action.before.status === "Menunggu Verifikasi" ? " · mode otomatis bisa menugaskannya lagi" : ""}`);
+  } catch (err) { toast(err.message || "Gagal mengurungkan."); await load(); }
+}
+
+// ---------- Lab Struktur Data ----------
+lab = initLab({ user, undoStack, getReports: () => reports, getTechs: () => techs, getLogs: () => logs, reload: () => load(), undo: undoLast });
+onViewChange(view => { if (view === "lab") lab.show(); });
+document.querySelectorAll("[data-lab]").forEach(a => a.addEventListener("click", () => lab.openTab(a.dataset.lab)));
 
 // ---------- Mode penugasan ----------
 function renderControl() {
@@ -127,7 +173,7 @@ async function renderDetail() {
   if (reBtn) reBtn.onclick = async () => { try { await reanalyzeReport(r.id); await load(); toast("AI menilai ulang laporan ini..."); } catch (err) { toast(err.message); } };
   if (isWaiting) {
     $("assignBtn").onclick = () => assign($("assignTechnician").value);
-    $("rejectBtn").onclick = () => change({ status: "Ditolak" }, "Laporan ditolak setelah verifikasi.");
+    $("rejectBtn").onclick = () => change({ status: "Ditolak" }, "Laporan ditolak setelah verifikasi.", `Tolak ${r.id}`);
     try {
       const list = await suggestTechnicians(r.id);
       if (selectedId !== r.id) return;
@@ -139,7 +185,7 @@ async function renderDetail() {
     } catch (err) { $("suggestList").innerHTML = `<small class="muted">${escapeHTML(err.message)}</small>`; }
   } else if (active(r)) {
     $("unassignBtn").onclick = async () => {
-      try { await unassignTask(r.id, "Dikembalikan ke antrean oleh admin"); await load(); toast("Tugas dikembalikan ke antrean."); } catch (err) { toast(err.message); }
+      try { await unassignTask(r.id, "Dikembalikan ke antrean oleh admin"); rememberAction(r, `Kembalikan ${r.id} ke antrean`, "Menunggu Verifikasi"); await load(); toast("Tugas dikembalikan ke antrean."); } catch (err) { toast(err.message); }
     };
   }
 }
@@ -176,10 +222,11 @@ async function assign(technicianId) {
   if (!technicianId) return toast("Pilih teknisi terlebih dahulu.");
   const t = techs.find(x => x.technicianId === technicianId);
   if (t && t.activeLoad >= t.capacity && !confirm(`${t.name} sudah memegang ${t.activeLoad}/${t.capacity} tugas. Tetap tugaskan?`)) return;
-  await change({ status: "Ditugaskan", technicianId, technicianName: t?.name || "" }, `Laporan ditugaskan ke ${t?.name || "teknisi"}.`);
+  await change({ status: "Ditugaskan", technicianId, technicianName: t?.name || "" }, `Laporan ditugaskan ke ${t?.name || "teknisi"}.`, `Tugaskan ${selectedId} ke ${t?.name || "teknisi"}`);
 }
-async function change(changes, message) {
-  try { await updateReport(selectedId, changes); selectedId = null; await load(); toast(message); }
+async function change(changes, message, undoLabel) {
+  const before = reports.find(r => r.id === selectedId);
+  try { await updateReport(selectedId, changes); if (before && undoLabel) rememberAction(before, undoLabel, changes.status); selectedId = null; await load(); toast(message); }
   catch (err) { toast(err.message || "Perubahan gagal disimpan."); }
 }
 $("frontBtn").onclick = () => { const first = waiting()[0]; if (!first) return toast("Antrean sudah kosong."); selectedId = first.id; renderQueue(); renderDetail(); navigate("antrean"); };
@@ -269,9 +316,32 @@ async function saveTech(id, changes, message) {
 }
 
 // ---------- Register & log ----------
+// ---------- Pohon wilayah = Tree, dihitung & dirender secara rekursif ----------
+let regionFilter = null;                     // { name, ids:Set } dari simpul yang diklik
+const TREE_ICON = { kota: "◉", kecamatan: "▣", kelurahan: "⌂", kategori: "◆", laporan: "•" };
+function regionFilterFor(tree, name) {
+  const path = tree.findPath(name);
+  return path && path.length > 1 ? { name, ids: new Set(tree.leaves(path.at(-1)).map(r => r.id)) } : null;
+}
+function renderRegionTree() {
+  const tree = buildRegionTree(reports);
+  const nodeHTML = node => {                 // REKURSIF: simpul lalu anak-anaknya
+    const n = tree.count(node), active = regionFilter?.name === node.name;
+    const kids = node.children.filter(c => c.type !== "laporan").map(nodeHTML).join("");
+    return `<li><button type="button" class="rt-node ${node.type} ${active ? "active" : ""} ${n ? "" : "empty"}" data-region="${escapeHTML(node.name)}">
+      <i>${TREE_ICON[node.type]}</i><span>${escapeHTML(node.name)}</span><b>${n}</b></button>${kids ? `<ul>${kids}</ul>` : ""}</li>`;
+  };
+  $("regionTree").innerHTML = `<ul class="rt-root">${nodeHTML(tree.root)}</ul>`;
+  $("regionTree").querySelectorAll("[data-region]").forEach(b => b.onclick = () => {
+    regionFilter = regionFilter?.name === b.dataset.region ? null : regionFilterFor(tree, b.dataset.region);
+    renderRegionTree(); renderTable();
+  });
+  $("regionChip").hidden = !regionFilter;
+  if (regionFilter) $("regionChipLabel").textContent = regionFilter.name;
+}
 function renderTable() {
   const q = $("adminSearch").value.toLowerCase(), status = $("statusFilter").value;
-  const rows = reports.filter(r => (status === "all" || r.status === status) && [r.id, r.village, r.address, r.category, r.technicianName].some(v => String(v || "").toLowerCase().includes(q)));
+  const rows = reports.filter(r => (!regionFilter || regionFilter.ids.has(r.id)) && (status === "all" || r.status === status) && [r.id, r.village, r.address, r.category, r.technicianName].some(v => String(v || "").toLowerCase().includes(q)));
   $("reportTableBody").innerHTML = rows.length ? rows.map(r => `<tr class="${selectedId === r.id ? "selected" : ""}"><td><strong>${escapeHTML(r.id)}</strong></td><td>${escapeHTML(r.village)}<br><small>${escapeHTML(r.address)}</small></td><td>${escapeHTML(r.category)}</td>
       <td><span class="urgency-chip ${urgencyClass(r.urgency)}">${r.urgency}</span></td>
       <td>${escapeHTML(r.technicianName || "—")}${r.assignedBy ? `<br><small>${r.assignedBy === "sistem" ? "otomatis" : "manual"}</small>` : ""}</td>
@@ -293,10 +363,15 @@ async function load() {
     [reports, techs, settings, logs] = await Promise.all([listReports(user), listTechnicianOverview(), getSettings(), listDispatchLog()]);
   } catch (err) { toast(err.message || "Gagal memuat data."); }
   if (selectedId && !reports.some(r => r.id === selectedId && r.status !== "Selesai" && r.status !== "Ditolak")) selectedId = null;
-  renderControl(); renderSummary(); renderQueue(); renderTechs(); renderTable(); renderLog(); renderDetail(); renderMap(); renderAttention();
+  if (regionFilter) regionFilter = regionFilterFor(buildRegionTree(reports), regionFilter.name);
+  renderControl(); renderSummary(); renderQueue(); renderTechs(); renderRegionTree(); renderTable(); renderLog(); renderDetail(); renderMap(); renderAttention(); renderUndo();
+  lab?.refresh();
 }
+$("regionChipClear").onclick = () => { regionFilter = null; renderRegionTree(); renderTable(); };
+$("undoBtn").onclick = undoLast;
 $("adminSearch").oninput = renderTable; $("statusFilter").onchange = renderTable;
 setInterval(() => { if (!document.hidden && !document.querySelector("select:focus, input:focus, textarea:focus")) load(); }, 30000);
 setInterval(() => { if (!document.hidden && reports.some(r => ["pending", "processing"].includes(r.aiStatus)) && !document.querySelector("select:focus, input:focus")) load(); }, 8000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 await load();
+if (currentView() === "lab") lab.show();
